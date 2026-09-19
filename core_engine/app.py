@@ -56,63 +56,7 @@ def get_client_ip():
     return None
 
 
-def inject_mobile_sidebar_controller(force_collapse=False):
-    """
-    ChatGPT-Style Mobile UX:
-    Uses native st.html (zero iframes) with unsafe_allow_javascript=True
-    to directly access the Streamlit DOM and collapse the sidebar on mobile devices.
-    """
-    collapse_call = "collapseSidebarIfMobile(); setTimeout(collapseSidebarIfMobile, 150);" if force_collapse else ""
-    js_code = f"""
-    <script>
-    (function() {{
-        function collapseSidebarIfMobile() {{
-            if (window.innerWidth > 850) return;
-            const selectors = [
-                'button[aria-label="Close sidebar"]',
-                'button[aria-label="Collapse sidebar"]',
-                '[data-testid="stSidebarCollapseButton"] button',
-                '[data-testid="stSidebarCollapseButton"]',
-                '[data-testid="stSidebar"] button[kind="headerNoPadding"]',
-                '[data-testid="stSidebar"] [data-testid="baseButton-headerNoPadding"]',
-                '.stSidebar [data-testid="baseButton-headerNoPadding"]'
-            ];
-            for (const s of selectors) {{
-                const btn = document.querySelector(s);
-                if (btn && btn.offsetParent !== null) {{
-                    btn.click();
-                    return true;
-                }}
-            }}
-            return false;
-        }}
 
-        {collapse_call}
-
-        function setupSidebarListener() {{
-            const sidebar = document.querySelector('[data-testid="stSidebar"]');
-            if (sidebar && !sidebar.dataset.mobileCloseBound) {{
-                sidebar.dataset.mobileCloseBound = "true";
-                sidebar.addEventListener('click', function(e) {{
-                    const target = e.target.closest('button, [role="radio"]');
-                    if (target && window.innerWidth <= 850) {{
-                        if (target.getAttribute('aria-label') === 'Delete from history') return;
-                        setTimeout(collapseSidebarIfMobile, 120);
-                    }}
-                }}, true);
-            }}
-        }}
-
-        if (document.readyState === 'complete' || document.readyState === 'interactive') {{
-            setupSidebarListener();
-        }} else {{
-            document.addEventListener('DOMContentLoaded', setupSidebarListener);
-        }}
-        setTimeout(setupSidebarListener, 250);
-    }})();
-    </script>
-    """
-    st.html(js_code, unsafe_allow_javascript=True)
 
 
 def render_gps_detector_button(lang_code):
@@ -198,7 +142,7 @@ st.set_page_config(
     page_title="Plant Mamba - Autonomous Crop Pathology Platform",
     page_icon="🌿",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="auto"
 )
 
 # --- High-End Modern Styling (Bright & Clean Light Mode with Emerald Accents) ---
@@ -665,7 +609,7 @@ def main():
     # -------------------------------------------------------------------------
     # TOP NAVBAR
     # -------------------------------------------------------------------------
-    col_nav1, col_nav2 = st.columns([4.2, 1.8])
+    col_nav1, col_nav2, col_nav3 = st.columns([3.2, 1.8, 1.4])
     with col_nav1:
         st.markdown(f"""
         <div class="brand-title">
@@ -675,6 +619,13 @@ def main():
         """, unsafe_allow_html=True)
 
     with col_nav2:
+        new_diag_clean = get_text("new_diagnosis", lang_code).replace("➕", "").strip()
+        if st.button(f"➕ {new_diag_clean}", key="btn_top_new_diag", use_container_width=True):
+            st.session_state["active_consultation"] = None
+            st.session_state["current_view"] = "scanner"
+            st.rerun()
+
+    with col_nav3:
         # Language Switcher in Navbar
         lang_options = ["English", "हिन्दी (Hindi)", "मराठी (Marathi)"]
         saved_lang = st.session_state.get("lang_code", "en")
@@ -722,7 +673,6 @@ def main():
         if st.button(get_text("new_diagnosis", lang_code), use_container_width=True):
             st.session_state["active_consultation"] = None
             st.session_state["current_view"] = "scanner"
-            st.session_state["trigger_mobile_collapse"] = True
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -752,7 +702,6 @@ def main():
         for k, v in nav_options.items():
             if v == selected_view_name and st.session_state.get("current_view") != k:
                 st.session_state["current_view"] = k
-                st.session_state["trigger_mobile_collapse"] = True
                 st.rerun()
 
         # 3. Location & Live Weather Settings
@@ -810,7 +759,6 @@ def main():
                     if st.button(btn_label, key=f"hist_btn_{cid}", help=f"Recorded: {c_time} | Status: {c_stat}"):
                         st.session_state["active_consultation"] = item
                         st.session_state["current_view"] = "scanner"
-                        st.session_state["trigger_mobile_collapse"] = True
                         st.rerun()
                 with col_h2:
                     if st.button("🗑️", key=f"del_hist_{cid}", help="Delete from history"):
@@ -837,10 +785,6 @@ def main():
             st.session_state["user"] = None
             st.session_state["active_consultation"] = None
             st.rerun()
-
-    # Inject mobile sidebar collapse listener / trigger
-    should_force_collapse = st.session_state.pop("trigger_mobile_collapse", False)
-    inject_mobile_sidebar_controller(force_collapse=should_force_collapse)
 
     # -------------------------------------------------------------------------
     # MAIN VIEW ROUTING
@@ -870,6 +814,11 @@ def main():
                 </div>
             </div>
             """, unsafe_allow_html=True)
+
+            if st.button("➕ " + get_text("new_diagnosis", lang_code), key="btn_case_a_new_diag", use_container_width=True):
+                st.session_state["active_consultation"] = None
+                st.session_state["current_view"] = "scanner"
+                st.rerun()
 
             col_img1, col_img2 = st.columns(2)
             with col_img1:
