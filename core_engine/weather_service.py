@@ -2,49 +2,135 @@
 Weather & Agronomic Risk Analysis Service
 Fetches real-time location weather (temperature, humidity) and calculates
 pathogen transmission risk based on current microclimate.
+Supports browser GPS coordinates, client IP lookup, and blocks foreign cloud datacenters.
 """
 
 import requests
 
 POPULAR_REGIONS = {
-    "Nagpur": {"lat": 21.1458, "lon": 79.0882},
-    "Pune": {"lat": 18.5204, "lon": 73.8567},
-    "Nashik": {"lat": 19.9975, "lon": 73.7898},
-    "Aurangabad (Chh. Sambhajinagar)": {"lat": 19.8762, "lon": 75.3433},
-    "Amravati": {"lat": 20.9374, "lon": 77.7796},
-    "Kolhapur": {"lat": 16.7050, "lon": 74.2433},
+    # Maharashtra Key Agricultural Districts
+    "Nashik": {"lat": 19.9975, "lon": 73.7898, "state": "Maharashtra", "desc": "Grapes, Onions & Vegetables"},
+    "Pune": {"lat": 18.5204, "lon": 73.8567, "state": "Maharashtra", "desc": "Floriculture & Horticulture"},
+    "Nagpur": {"lat": 21.1458, "lon": 79.0882, "state": "Maharashtra", "desc": "Oranges & Cotton"},
+    "Chh. Sambhajinagar (Aurangabad)": {"lat": 19.8762, "lon": 75.3433, "state": "Maharashtra", "desc": "Cotton, Maize & Pulses"},
+    "Kolhapur": {"lat": 16.7050, "lon": 74.2433, "state": "Maharashtra", "desc": "Sugarcane & Jaggery"},
+    "Solapur": {"lat": 17.6599, "lon": 75.9064, "state": "Maharashtra", "desc": "Pomegranate & Sorghum"},
+    "Ahmednagar": {"lat": 19.0948, "lon": 74.7480, "state": "Maharashtra", "desc": "Sugarcane & Vegetables"},
+    "Satara": {"lat": 17.6805, "lon": 74.0183, "state": "Maharashtra", "desc": "Strawberry & Turmeric"},
+    "Sangli": {"lat": 16.8524, "lon": 74.5815, "state": "Maharashtra", "desc": "Turmeric, Grapes & Raisins"},
+    "Jalgaon": {"lat": 21.0077, "lon": 75.5626, "state": "Maharashtra", "desc": "Banana Capital & Cotton"},
+    "Amravati": {"lat": 20.9374, "lon": 77.7796, "state": "Maharashtra", "desc": "Oranges & Soybean"},
+    "Akola": {"lat": 20.7002, "lon": 77.0082, "state": "Maharashtra", "desc": "Pulses & Cotton Research"},
+    "Latur": {"lat": 18.4088, "lon": 76.5604, "state": "Maharashtra", "desc": "Soybean & Oilseeds Hub"},
+    "Nanded": {"lat": 19.1383, "lon": 77.3210, "state": "Maharashtra", "desc": "Banana & Cotton"},
+    "Yavatmal": {"lat": 20.3888, "lon": 78.1204, "state": "Maharashtra", "desc": "Cotton Belt"},
+    "Dhule": {"lat": 20.9042, "lon": 74.7749, "state": "Maharashtra", "desc": "Chili & Bajra"},
+    "Ratnagiri": {"lat": 16.9902, "lon": 73.3120, "state": "Maharashtra", "desc": "Alphonso Mango & Cashew"},
+    "Mumbai / Thane": {"lat": 19.0760, "lon": 72.8777, "state": "Maharashtra", "desc": "Coastal Agro Market"},
+    
+    # National Agricultural Hubs
+    "Indore": {"lat": 22.7196, "lon": 75.8577, "state": "Madhya Pradesh", "desc": "Wheat & Soybean"},
+    "Bhopal": {"lat": 23.2599, "lon": 77.4126, "state": "Madhya Pradesh", "desc": "Pulses & Gram"},
+    "Chandigarh / Ludhiana": {"lat": 30.7333, "lon": 76.7794, "state": "Punjab", "desc": "Wheat & Rice Bowl"},
+    "Hyderabad": {"lat": 17.3850, "lon": 78.4867, "state": "Telangana", "desc": "Cotton, Chili & Rice"},
+    "Bengaluru": {"lat": 12.9716, "lon": 77.5946, "state": "Karnataka", "desc": "Horticulture & Coffee"},
+    "Lucknow": {"lat": 26.8467, "lon": 80.9462, "state": "Uttar Pradesh", "desc": "Mango, Potato & Sugarcane"},
+    "New Delhi": {"lat": 28.6139, "lon": 77.2090, "state": "Delhi NCR", "desc": "IARI Central Research"},
 }
 
 
-def get_live_weather(selected_city="Auto-Detect"):
+def get_live_weather(selected_city="Auto-Detect", client_ip=None, gps_coords=None):
     """
-    Fetches real-time weather data. Uses IP geolocation if selected_city is Auto-Detect.
+    Fetches real-time weather data.
+    Priority:
+    1. Exact Browser GPS coordinates if provided (lat, lon)
+    2. Selected city from POPULAR_REGIONS
+    3. Client IP geolocation (using client's public IP from request headers)
+    4. Safe fallback to Nashik (Maharashtra Agro Hub) if cloud datacenter (e.g. US / The Dalles) is detected.
     """
-    city = "Nagpur"
-    lat, lon = 21.1458, 79.0882
+    DATACENTER_CITIES = {
+        "the dalles", "council bluffs", "north bergen", "ashburn", "boardman",
+        "mountain view", "santa clara", "seattle", "des moines", "quincy"
+    }
 
-    if selected_city != "Auto-Detect" and selected_city in POPULAR_REGIONS:
+    city = "Nashik"
+    lat, lon = 19.9975, 73.7898
+    source_tag = "Default"
+
+    # Case 1: Exact GPS coordinates from client browser
+    if gps_coords and isinstance(gps_coords, dict) and "lat" in gps_coords and "lon" in gps_coords:
+        try:
+            g_lat = float(gps_coords["lat"])
+            g_lon = float(gps_coords["lon"])
+            lat, lon = g_lat, g_lon
+            source_tag = "Live GPS"
+            try:
+                rg_url = f"https://api.bigdatacloud.net/data/reverse-geocode-client?latitude={lat}&longitude={lon}&localityLanguage=en"
+                rg = requests.get(rg_url, timeout=2.5).json()
+                loc = rg.get("city") or rg.get("locality") or rg.get("principalSubdivision")
+                if loc:
+                    city = loc
+                else:
+                    city = f"GPS ({lat:.2f}°, {lon:.2f}°)"
+            except Exception:
+                city = f"GPS ({lat:.2f}°, {lon:.2f}°)"
+        except Exception:
+            pass
+
+    # Case 2: Selected from POPULAR_REGIONS
+    elif selected_city != "Auto-Detect" and selected_city in POPULAR_REGIONS:
         city = selected_city
         lat = POPULAR_REGIONS[selected_city]["lat"]
         lon = POPULAR_REGIONS[selected_city]["lon"]
-    else:
-        try:
-            res = requests.get("http://ip-api.com/json/", timeout=3.5).json()
-            if res.get("status") == "success":
-                city = res.get("city", "Nagpur")
-                lat = res.get("lat", 21.1458)
-                lon = res.get("lon", 79.0882)
-        except Exception:
-            city = "Nagpur"
+        source_tag = "Selected"
 
-    temp = 25.0
-    humidity = 85.0
+    # Case 3: Auto-Detect via IP
+    else:
+        detected = False
+        # Try client IP if provided and public
+        if client_ip and isinstance(client_ip, str) and not client_ip.startswith(("127.", "10.", "192.168.", "172.")):
+            try:
+                res = requests.get(f"http://ip-api.com/json/{client_ip}", timeout=2.5).json()
+                if res.get("status") == "success":
+                    det_city = res.get("city", "")
+                    country_code = res.get("countryCode", "")
+                    if country_code == "IN" or (res.get("country") == "India" and det_city.lower() not in DATACENTER_CITIES):
+                        city = det_city
+                        lat = res.get("lat", 19.9975)
+                        lon = res.get("lon", 73.7898)
+                        detected = True
+                        source_tag = "Client IP"
+            except Exception:
+                pass
+
+        if not detected:
+            try:
+                res = requests.get("http://ip-api.com/json/", timeout=2.5).json()
+                if res.get("status") == "success":
+                    det_city = res.get("city", "")
+                    country_code = res.get("countryCode", "")
+                    if country_code == "IN" and det_city.lower() not in DATACENTER_CITIES:
+                        city = det_city
+                        lat = res.get("lat", 19.9975)
+                        lon = res.get("lon", 73.7898)
+                        detected = True
+                        source_tag = "Auto IP"
+            except Exception:
+                pass
+
+        if not detected:
+            city = "Nashik (Agro Hub)"
+            lat, lon = 19.9975, 73.7898
+            source_tag = "Agro Hub"
+
+    temp = 26.5
+    humidity = 68.0
     try:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m"
-        w = requests.get(url, timeout=3.5).json()
+        w = requests.get(url, timeout=3.0).json()
         curr = w.get("current", {})
-        temp = curr.get("temperature_2m", 25.0)
-        humidity = curr.get("relative_humidity_2m", 85.0)
+        temp = curr.get("temperature_2m", 26.5)
+        humidity = curr.get("relative_humidity_2m", 68.0)
     except Exception:
         pass
 
@@ -53,7 +139,8 @@ def get_live_weather(selected_city="Auto-Detect"):
         "lat": lat,
         "lon": lon,
         "temperature": round(temp, 1),
-        "humidity": round(humidity, 1)
+        "humidity": round(humidity, 1),
+        "source": source_tag
     }
 
 
