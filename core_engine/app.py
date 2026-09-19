@@ -226,6 +226,145 @@ st.markdown("""
         background-color: #ffffff;
         border-right: 1px solid #e2e8f0;
     }
+
+    /* =========================================================================
+       CRITICAL CONTRAST FIXES: TABS, INPUTS, LABELS & TEXT MUST BE BLACK/SLATE
+       ========================================================================= */
+    /* All Tabs: Force Deep Black/Dark Slate Font Color */
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: transparent !important;
+        border-bottom: 2px solid #cbd5e1 !important;
+        gap: 8px !important;
+    }
+    .stTabs [data-baseweb="tab"],
+    .stTabs button[role="tab"],
+    div[data-testid="stTabs"] button {
+        color: #0f172a !important;
+        font-weight: 700 !important;
+        font-size: 0.96rem !important;
+        background-color: #f1f5f9 !important;
+        border-radius: 8px 8px 0 0 !important;
+        padding: 10px 18px !important;
+        border: 1px solid #cbd5e1 !important;
+        border-bottom: none !important;
+        transition: all 0.2s ease !important;
+    }
+    .stTabs [data-baseweb="tab"] p,
+    .stTabs button[role="tab"] p,
+    div[data-testid="stTabs"] button p,
+    .stTabs [data-baseweb="tab"] span,
+    .stTabs button[role="tab"] span,
+    div[data-testid="stTabs"] button span,
+    .stTabs [data-baseweb="tab"] div,
+    .stTabs button[role="tab"] div {
+        color: #0f172a !important;
+        font-weight: 700 !important;
+    }
+    .stTabs [data-baseweb="tab"]:hover,
+    .stTabs button[role="tab"]:hover,
+    div[data-testid="stTabs"] button:hover {
+        background-color: #e2e8f0 !important;
+        color: #047857 !important;
+    }
+    .stTabs [data-baseweb="tab"]:hover p,
+    .stTabs button[role="tab"]:hover p {
+        color: #047857 !important;
+    }
+    .stTabs [data-baseweb="tab"][aria-selected="true"],
+    .stTabs button[role="tab"][aria-selected="true"],
+    div[data-testid="stTabs"] button[aria-selected="true"] {
+        color: #047857 !important;
+        background-color: #ffffff !important;
+        border-top: 3px solid #059669 !important;
+        border-left: 1px solid #cbd5e1 !important;
+        border-right: 1px solid #cbd5e1 !important;
+        border-bottom: 2px solid #ffffff !important;
+        margin-bottom: -2px !important;
+    }
+    .stTabs [data-baseweb="tab"][aria-selected="true"] p,
+    .stTabs button[role="tab"][aria-selected="true"] p,
+    div[data-testid="stTabs"] button[aria-selected="true"] p,
+    .stTabs [data-baseweb="tab"][aria-selected="true"] span,
+    .stTabs button[role="tab"][aria-selected="true"] span {
+        color: #047857 !important;
+        font-weight: 800 !important;
+    }
+    .stTabs [data-baseweb="tab-highlight"] {
+        background-color: #059669 !important;
+    }
+
+    /* Universal Text & Paragraphs */
+    p, span, label, li, dt, dd {
+        color: #0f172a;
+    }
+    .stMarkdown, .stMarkdown p, .stMarkdown span {
+        color: #0f172a !important;
+    }
+
+    /* Form Labels & Placeholders */
+    .stTextInput label, .stSelectbox label, .stNumberInput label, .stFileUploader label, .stRadio label {
+        color: #0f172a !important;
+        font-weight: 700 !important;
+        font-size: 0.92rem !important;
+    }
+    .stTextInput label p, .stSelectbox label p, .stRadio label p, .stFileUploader label p {
+        color: #0f172a !important;
+        font-weight: 700 !important;
+    }
+    input, textarea {
+        color: #0f172a !important;
+        background-color: #ffffff !important;
+        border: 1.5px solid #cbd5e1 !important;
+    }
+    div[data-baseweb="input"] {
+        background-color: #ffffff !important;
+        border: 1.5px solid #cbd5e1 !important;
+    }
+    div[data-baseweb="input"] input {
+        color: #0f172a !important;
+    }
+    div[data-baseweb="select"] {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+    }
+    div[data-baseweb="select"] * {
+        color: #0f172a !important;
+    }
+    div[data-baseweb="popover"] div {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+    }
+
+    /* Radio Buttons */
+    div[role="radiogroup"] label {
+        color: #0f172a !important;
+    }
+    div[role="radiogroup"] label p {
+        color: #0f172a !important;
+        font-weight: 600 !important;
+    }
+
+    /* Expanders */
+    .streamlit-expanderHeader, [data-testid="stExpander"] summary {
+        color: #0f172a !important;
+        font-weight: 700 !important;
+    }
+    [data-testid="stExpander"] summary p {
+        color: #0f172a !important;
+        font-weight: 700 !important;
+    }
+    [data-testid="stExpander"] summary svg {
+        fill: #0f172a !important;
+    }
+
+    /* Metric Values & Labels */
+    [data-testid="stMetricValue"] {
+        color: #0f172a !important;
+    }
+    [data-testid="stMetricLabel"] p {
+        color: #334155 !important;
+        font-weight: 700 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
