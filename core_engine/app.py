@@ -606,6 +606,9 @@ def main():
     pipeline = get_pipeline()
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
+    # Ensure active language is initialized before rendering UI
+    lang_code = st.session_state.get("lang_code", "en")
+
     # -------------------------------------------------------------------------
     # TOP NAVBAR
     # -------------------------------------------------------------------------
@@ -628,20 +631,22 @@ def main():
     with col_nav3:
         # Language Switcher in Navbar
         lang_options = ["English", "हिन्दी (Hindi)", "मराठी (Marathi)"]
-        saved_lang = st.session_state.get("lang_code", "en")
-        current_idx = 1 if saved_lang == "hi" else 2 if saved_lang == "mr" else 0
+        current_idx = 1 if lang_code == "hi" else 2 if lang_code == "mr" else 0
         lang_choice = st.selectbox(
             "Language",
             lang_options,
             index=current_idx,
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            key="top_navbar_lang_selector"
         )
-        lang_code = "en"
+        selected_code = "en"
         if "हिन्दी" in lang_choice:
-            lang_code = "hi"
+            selected_code = "hi"
         elif "मराठी" in lang_choice:
-            lang_code = "mr"
-        st.session_state["lang_code"] = lang_code
+            selected_code = "mr"
+        if selected_code != lang_code:
+            st.session_state["lang_code"] = selected_code
+            st.rerun()
 
     # -------------------------------------------------------------------------
     # ROLE RESOLUTION & STYLING
