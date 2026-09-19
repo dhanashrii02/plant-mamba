@@ -8,10 +8,15 @@ Supports browser GPS coordinates, client IP lookup, and blocks foreign cloud dat
 import requests
 
 POPULAR_REGIONS = {
-    # Maharashtra Key Agricultural Districts
+    # Vidarbha & Maharashtra Key Agricultural Districts
+    "Arvi (Wardha / वर्धा)": {"lat": 20.9996, "lon": 78.2291, "state": "Maharashtra", "desc": "Cotton, Soybean & Oranges"},
+    "Nagpur": {"lat": 21.1458, "lon": 79.0882, "state": "Maharashtra", "desc": "Oranges & Cotton"},
+    "Wardha": {"lat": 20.7453, "lon": 78.6022, "state": "Maharashtra", "desc": "Vidarbha Agro Hub"},
     "Nashik": {"lat": 19.9975, "lon": 73.7898, "state": "Maharashtra", "desc": "Grapes, Onions & Vegetables"},
     "Pune": {"lat": 18.5204, "lon": 73.8567, "state": "Maharashtra", "desc": "Floriculture & Horticulture"},
-    "Nagpur": {"lat": 21.1458, "lon": 79.0882, "state": "Maharashtra", "desc": "Oranges & Cotton"},
+    "Amravati": {"lat": 20.9374, "lon": 77.7796, "state": "Maharashtra", "desc": "Oranges & Soybean"},
+    "Akola": {"lat": 20.7002, "lon": 77.0082, "state": "Maharashtra", "desc": "Pulses & Cotton Research"},
+    "Yavatmal": {"lat": 20.3888, "lon": 78.1204, "state": "Maharashtra", "desc": "Cotton Belt"},
     "Chh. Sambhajinagar (Aurangabad)": {"lat": 19.8762, "lon": 75.3433, "state": "Maharashtra", "desc": "Cotton, Maize & Pulses"},
     "Kolhapur": {"lat": 16.7050, "lon": 74.2433, "state": "Maharashtra", "desc": "Sugarcane & Jaggery"},
     "Solapur": {"lat": 17.6599, "lon": 75.9064, "state": "Maharashtra", "desc": "Pomegranate & Sorghum"},
@@ -19,11 +24,8 @@ POPULAR_REGIONS = {
     "Satara": {"lat": 17.6805, "lon": 74.0183, "state": "Maharashtra", "desc": "Strawberry & Turmeric"},
     "Sangli": {"lat": 16.8524, "lon": 74.5815, "state": "Maharashtra", "desc": "Turmeric, Grapes & Raisins"},
     "Jalgaon": {"lat": 21.0077, "lon": 75.5626, "state": "Maharashtra", "desc": "Banana Capital & Cotton"},
-    "Amravati": {"lat": 20.9374, "lon": 77.7796, "state": "Maharashtra", "desc": "Oranges & Soybean"},
-    "Akola": {"lat": 20.7002, "lon": 77.0082, "state": "Maharashtra", "desc": "Pulses & Cotton Research"},
     "Latur": {"lat": 18.4088, "lon": 76.5604, "state": "Maharashtra", "desc": "Soybean & Oilseeds Hub"},
     "Nanded": {"lat": 19.1383, "lon": 77.3210, "state": "Maharashtra", "desc": "Banana & Cotton"},
-    "Yavatmal": {"lat": 20.3888, "lon": 78.1204, "state": "Maharashtra", "desc": "Cotton Belt"},
     "Dhule": {"lat": 20.9042, "lon": 74.7749, "state": "Maharashtra", "desc": "Chili & Bajra"},
     "Ratnagiri": {"lat": 16.9902, "lon": 73.3120, "state": "Maharashtra", "desc": "Alphonso Mango & Cashew"},
     "Mumbai / Thane": {"lat": 19.0760, "lon": 72.8777, "state": "Maharashtra", "desc": "Coastal Agro Market"},
@@ -45,17 +47,18 @@ def get_live_weather(selected_city="Auto-Detect", client_ip=None, gps_coords=Non
     Priority:
     1. Exact Browser GPS coordinates if provided (lat, lon)
     2. Selected city from POPULAR_REGIONS
-    3. Client IP geolocation (using client's public IP from request headers)
-    4. Safe fallback to Nashik (Maharashtra Agro Hub) if cloud datacenter (e.g. US / The Dalles) is detected.
+    3. Dynamically geocoded custom town/city
+    4. Client IP geolocation (using client's public IP from request headers)
+    5. Safe fallback to Arvi (Wardha / Vidarbha) if cloud datacenter is detected.
     """
     DATACENTER_CITIES = {
         "the dalles", "council bluffs", "north bergen", "ashburn", "boardman",
         "mountain view", "santa clara", "seattle", "des moines", "quincy"
     }
 
-    city = "Nashik"
-    lat, lon = 19.9975, 73.7898
-    source_tag = "Default"
+    city = "Arvi (Wardha / Nagpur)"
+    lat, lon = 20.9996, 78.2291
+    source_tag = "Vidarbha Agro Hub"
 
     # Case 1: Exact GPS coordinates from client browser
     if gps_coords and isinstance(gps_coords, dict) and "lat" in gps_coords and "lon" in gps_coords:
@@ -84,6 +87,27 @@ def get_live_weather(selected_city="Auto-Detect", client_ip=None, gps_coords=Non
         lon = POPULAR_REGIONS[selected_city]["lon"]
         source_tag = "Selected"
 
+    # Case 2b: Custom town or village name entered
+    elif selected_city != "Auto-Detect" and selected_city.strip():
+        try:
+            q_clean = selected_city.split("(")[0].strip()
+            rg = requests.get(f"https://geocoding-api.open-meteo.com/v1/search?name={q_clean}&count=1&language=en&format=json", timeout=2.5).json()
+            res_list = rg.get("results", [])
+            if res_list:
+                top = res_list[0]
+                city = top.get("name", selected_city)
+                lat = top.get("latitude", 20.9996)
+                lon = top.get("longitude", 78.2291)
+                source_tag = "Search"
+            else:
+                city = selected_city
+                lat, lon = 20.9996, 78.2291
+                source_tag = "Custom"
+        except Exception:
+            city = selected_city
+            lat, lon = 20.9996, 78.2291
+            source_tag = "Custom"
+
     # Case 3: Auto-Detect via IP
     else:
         detected = False
@@ -96,8 +120,8 @@ def get_live_weather(selected_city="Auto-Detect", client_ip=None, gps_coords=Non
                     country_code = res.get("countryCode", "")
                     if country_code == "IN" or (res.get("country") == "India" and det_city.lower() not in DATACENTER_CITIES):
                         city = det_city
-                        lat = res.get("lat", 19.9975)
-                        lon = res.get("lon", 73.7898)
+                        lat = float(res.get("lat") or 20.9996)
+                        lon = float(res.get("lon") or 78.2291)
                         detected = True
                         source_tag = "Client IP"
             except Exception:
@@ -111,17 +135,17 @@ def get_live_weather(selected_city="Auto-Detect", client_ip=None, gps_coords=Non
                     country_code = res.get("countryCode", "")
                     if country_code == "IN" and det_city.lower() not in DATACENTER_CITIES:
                         city = det_city
-                        lat = res.get("lat", 19.9975)
-                        lon = res.get("lon", 73.7898)
+                        lat = float(res.get("lat") or 20.9996)
+                        lon = float(res.get("lon") or 78.2291)
                         detected = True
                         source_tag = "Auto IP"
             except Exception:
                 pass
 
         if not detected:
-            city = "Nashik (Agro Hub)"
-            lat, lon = 19.9975, 73.7898
-            source_tag = "Agro Hub"
+            city = "Arvi (Wardha / Nagpur)"
+            lat, lon = 20.9996, 78.2291
+            source_tag = "Vidarbha Agro Hub"
 
     temp = 26.5
     humidity = 68.0

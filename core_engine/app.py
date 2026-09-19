@@ -59,93 +59,93 @@ def get_client_ip():
 def inject_mobile_sidebar_controller(force_collapse=False):
     """
     ChatGPT-Style Mobile UX:
-    On mobile viewports (<= 850px), automatically collapses the sidebar whenever
-    the user clicks 'New Diagnosis', selects a previous scan, or navigates to a view,
-    revealing the main diagnostic canvas immediately.
+    Uses native st.html (zero iframes) with unsafe_allow_javascript=True
+    to directly access the Streamlit DOM and collapse the sidebar on mobile devices.
     """
-    js_force = "true" if force_collapse else "false"
+    collapse_call = "collapseSidebarIfMobile(); setTimeout(collapseSidebarIfMobile, 150);" if force_collapse else ""
     js_code = f"""
     <script>
     (function() {{
-        const force = {js_force};
-        try {{
-            const win = window.parent || window;
-            const doc = win.document;
-            const isMobile = () => (win.innerWidth <= 850);
-
-            function findAndClickCollapse() {{
-                const selectors = [
-                    '[data-testid="stSidebarCollapseButton"] button',
-                    '[data-testid="stSidebarCollapseButton"]',
-                    '[data-testid="stSidebar"] button[kind="headerNoPadding"]',
-                    '[data-testid="stSidebar"] [data-testid="baseButton-headerNoPadding"]',
-                    'button[aria-label="Close sidebar"]',
-                    'button[aria-label="Collapse sidebar"]',
-                    '.stSidebar button[kind="headerNoPadding"]'
-                ];
-                for (const sel of selectors) {{
-                    const btn = doc.querySelector(sel);
-                    if (btn && btn.offsetParent !== null) {{
-                        btn.click();
-                        return true;
-                    }}
+        function collapseSidebarIfMobile() {{
+            if (window.innerWidth > 850) return;
+            const selectors = [
+                'button[aria-label="Close sidebar"]',
+                'button[aria-label="Collapse sidebar"]',
+                '[data-testid="stSidebarCollapseButton"] button',
+                '[data-testid="stSidebarCollapseButton"]',
+                '[data-testid="stSidebar"] button[kind="headerNoPadding"]',
+                '[data-testid="stSidebar"] [data-testid="baseButton-headerNoPadding"]',
+                '.stSidebar [data-testid="baseButton-headerNoPadding"]'
+            ];
+            for (const s of selectors) {{
+                const btn = document.querySelector(s);
+                if (btn && btn.offsetParent !== null) {{
+                    btn.click();
+                    return true;
                 }}
-                return false;
             }}
+            return false;
+        }}
 
-            if (force && isMobile()) {{
-                setTimeout(findAndClickCollapse, 80);
-            }}
+        {collapse_call}
 
-            // Dynamic listener on sidebar buttons for instant mobile dismiss
-            const sidebar = doc.querySelector('[data-testid="stSidebar"]');
-            if (sidebar && !sidebar.dataset.mobileAutoCollapseBound) {{
-                sidebar.dataset.mobileAutoCollapseBound = "true";
-                sidebar.addEventListener('click', (e) => {{
-                    const btn = e.target.closest('button, [role="radio"]');
-                    if (btn && isMobile()) {{
-                        setTimeout(findAndClickCollapse, 120);
+        function setupSidebarListener() {{
+            const sidebar = document.querySelector('[data-testid="stSidebar"]');
+            if (sidebar && !sidebar.dataset.mobileCloseBound) {{
+                sidebar.dataset.mobileCloseBound = "true";
+                sidebar.addEventListener('click', function(e) {{
+                    const target = e.target.closest('button, [role="radio"]');
+                    if (target && window.innerWidth <= 850) {{
+                        if (target.getAttribute('aria-label') === 'Delete from history') return;
+                        setTimeout(collapseSidebarIfMobile, 120);
                     }}
                 }}, true);
             }}
-        }} catch (e) {{}}
+        }}
+
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {{
+            setupSidebarListener();
+        }} else {{
+            document.addEventListener('DOMContentLoaded', setupSidebarListener);
+        }}
+        setTimeout(setupSidebarListener, 250);
     }})();
     </script>
     """
-    components.html(js_code, height=0, width=0)
+    st.html(js_code, unsafe_allow_javascript=True)
 
 
 def render_gps_detector_button(lang_code):
     """
-    Renders an HTML5 browser Geolocation button that requests user's exact device GPS.
+    Direct DOM HTML5 Geolocation Button (No iframes)
+    Prompts browser permission and updates URL parameters directly in the same window.
     """
     if lang_code == "hi":
-        btn_text = "📍 लाइव जीपीएस खोजें (Detect GPS)"
-        detecting = "जीपीएस खोज रहे हैं..."
-        err_msg = "⚠️ जीपीएस अनुमति अस्वीकृत। कृपया सूची से अपना जिला चुनें।"
+        btn_text = "📍 सटीक लाइव जीपीएस खोजें (Detect GPS)"
+        detecting = "📡 सैटेलाइट जीपीएस से जुड़ रहे हैं..."
+        err_msg = "⚠️ जीपीएस अनुमति अस्वीकृत। कृपया सूची से अपना क्षेत्र चुनें।"
     elif lang_code == "mr":
-        btn_text = "📍 थेट जीपीएस स्थान शोधा (Detect GPS)"
-        detecting = "स्थान शोधत आहे..."
-        err_msg = "⚠️ जीपीएस परवानगी नाकारली. कृपया यादीतून जिल्हा निवडा."
+        btn_text = "📍 थेट लाइव जीपीएस स्थान शोधा (Detect GPS)"
+        detecting = "📡 थेट जीपीएस शोधत आहे..."
+        err_msg = "⚠️ जीपीएस परवानगी नाकारली. कृपया यादीतून निवडा."
     else:
         btn_text = "📍 Detect Exact Live GPS"
-        detecting = "Requesting device GPS..."
-        err_msg = "⚠️ GPS permission denied. Please select district manually."
+        detecting = "📡 Connecting to device GPS..."
+        err_msg = "⚠️ GPS permission denied. Please select from list."
 
     gps_html = f"""
-    <div style="margin: 4px 0 10px 0;">
-        <button id="gpsBtn" onclick="requestUserGPS()" style="
+    <div style="margin: 6px 0 10px 0;">
+        <button id="liveGpsBtn" onclick="fetchDeviceLocation()" style="
             width: 100%;
-            background: #f0fdf4;
-            color: #047857;
-            border: 1.5px solid #a7f3d0;
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            color: #ffffff;
+            border: none;
             border-radius: 8px;
-            padding: 7px 10px;
-            font-size: 0.82rem;
+            padding: 9px 12px;
+            font-size: 0.84rem;
             font-weight: 700;
             cursor: pointer;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(5,150,105,0.25);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -153,35 +153,30 @@ def render_gps_detector_button(lang_code):
         ">
             {btn_text}
         </button>
-        <div id="gpsStatus" style="font-size: 0.72rem; color: #047857; margin-top: 4px; text-align: center; display: none;"></div>
+        <div id="liveGpsStatus" style="font-size: 0.75rem; color: #047857; margin-top: 4px; text-align: center; display: none;"></div>
     </div>
     <script>
-    function requestUserGPS() {{
-        const btn = document.getElementById('gpsBtn');
-        const status = document.getElementById('gpsStatus');
+    function fetchDeviceLocation() {{
+        const btn = document.getElementById('liveGpsBtn');
+        const status = document.getElementById('liveGpsStatus');
         if (!navigator.geolocation) {{
             alert('Geolocation is not supported by your browser.');
             return;
         }}
         btn.disabled = true;
-        btn.style.opacity = '0.7';
+        btn.style.opacity = '0.75';
         btn.innerText = '{detecting}';
         status.style.display = 'block';
-        status.innerText = 'Connecting to browser GPS...';
+        status.innerText = '{detecting}';
 
         navigator.geolocation.getCurrentPosition(
             function(pos) {{
                 const lat = pos.coords.latitude.toFixed(4);
                 const lon = pos.coords.longitude.toFixed(4);
-                try {{
-                    const win = window.parent || window;
-                    const sp = new URLSearchParams(win.location.search);
-                    sp.set('gps_lat', lat);
-                    sp.set('gps_lon', lon);
-                    win.location.search = sp.toString();
-                }} catch (e) {{
-                    window.location.search = '?gps_lat=' + lat + '&gps_lon=' + lon;
-                }}
+                const sp = new URLSearchParams(window.location.search);
+                sp.set('gps_lat', lat);
+                sp.set('gps_lon', lon);
+                window.location.search = sp.toString();
             }},
             function(err) {{
                 btn.disabled = false;
@@ -190,12 +185,12 @@ def render_gps_detector_button(lang_code):
                 status.innerText = '{err_msg}';
                 status.style.color = '#dc2626';
             }},
-            {{ timeout: 10000, enableHighAccuracy: true }}
+            {{ timeout: 12000, enableHighAccuracy: true }}
         );
     }}
     </script>
     """
-    components.html(gps_html, height=44)
+    st.html(gps_html, unsafe_allow_javascript=True)
 
 
 # --- Page Configuration ---
@@ -203,7 +198,7 @@ st.set_page_config(
     page_title="Plant Mamba - Autonomous Crop Pathology Platform",
     page_icon="🌿",
     layout="wide",
-    initial_sidebar_state="auto"
+    initial_sidebar_state="collapsed"
 )
 
 # --- High-End Modern Styling (Bright & Clean Light Mode with Emerald Accents) ---
@@ -670,7 +665,7 @@ def main():
     # -------------------------------------------------------------------------
     # TOP NAVBAR
     # -------------------------------------------------------------------------
-    col_nav1, col_nav2, col_nav3 = st.columns([3.5, 2.5, 1.2])
+    col_nav1, col_nav2 = st.columns([4.2, 1.8])
     with col_nav1:
         st.markdown(f"""
         <div class="brand-title">
@@ -696,12 +691,6 @@ def main():
         elif "मराठी" in lang_choice:
             lang_code = "mr"
         st.session_state["lang_code"] = lang_code
-
-    with col_nav3:
-        if st.button(get_text("logout", lang_code), key="btn_logout", use_container_width=True):
-            st.session_state["user"] = None
-            st.session_state["active_consultation"] = None
-            st.rerun()
 
     # -------------------------------------------------------------------------
     # ROLE RESOLUTION & STYLING
@@ -770,18 +759,24 @@ def main():
         st.markdown("---")
         st.markdown(f"##### 📍 {get_text('farm_location_weather', lang_code)}")
 
-        # Real Browser GPS 1-Click Detector Button
+        # Direct DOM Live Browser GPS 1-Click Detector Button
         render_gps_detector_button(lang_code)
 
         gps_info = st.session_state.get("gps_coords")
-        region_options = ["Auto-Detect (GPS/IP)"] + list(POPULAR_REGIONS.keys())
+        region_options = ["Auto-Detect (GPS/IP)"] + list(POPULAR_REGIONS.keys()) + ["Custom Location / इतर गाव"]
         chosen_region = st.selectbox(get_text("region_select", lang_code), region_options)
 
+        if chosen_region == "Custom Location / इतर गाव":
+            typed_location = st.text_input("Enter village or town:", placeholder="e.g. Arvi, Wardha, Hinganghat...", key="typed_loc_input")
+            target_loc = typed_location.strip() if typed_location.strip() else "Arvi"
+        else:
+            target_loc = "Auto-Detect" if "Auto-Detect" in chosen_region else chosen_region
+
         client_ip = get_client_ip()
-        if "Auto-Detect" in chosen_region:
+        if target_loc == "Auto-Detect":
             weather = get_live_weather("Auto-Detect", client_ip=client_ip, gps_coords=gps_info)
         else:
-            weather = get_live_weather(chosen_region)
+            weather = get_live_weather(target_loc)
 
         badge_source = f" • {weather['source']}" if weather.get("source") else ""
         st.caption(f"📍 **{weather['city']}**{badge_source} | 🌡️ **{weather['temperature']}°C** | 💧 **{weather['humidity']}% RH**")
@@ -830,6 +825,18 @@ def main():
                     database.delete_consultation(item["id"], user_id=user["id"] if active_role != "Agronomist" else None)
                 st.session_state["active_consultation"] = None
                 st.rerun()
+
+        # 5. User Profile & Logout at Bottom of Sidebar (as requested)
+        st.markdown("---")
+        st.markdown(f"""
+        <div style="padding: 4px 0 8px 0; color: #475569; font-size: 0.84rem;">
+            👤 <b>{user['full_name']}</b> <span style="font-size: 0.78rem; color: #047857;">({role_tag})</span>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button(f"🚪 {get_text('logout', lang_code)}", key="btn_sidebar_logout", use_container_width=True):
+            st.session_state["user"] = None
+            st.session_state["active_consultation"] = None
+            st.rerun()
 
     # Inject mobile sidebar collapse listener / trigger
     should_force_collapse = st.session_state.pop("trigger_mobile_collapse", False)
