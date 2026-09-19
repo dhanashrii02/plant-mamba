@@ -767,13 +767,78 @@ def main():
         with col_up1:
             uploaded_file = st.file_uploader(get_text("upload_label", lang_code), type=["jpg", "jpeg", "png"])
         with col_up2:
-            val_dir = os.path.join(base_dir, "plantvillage_data", "data_38", "val")
-            if not os.path.exists(val_dir):
-                val_dir = os.path.join(base_dir, "plantvillage_data", "data", "val")
+            samples_dir = os.path.join(base_dir, "sample_images")
+            if not os.path.exists(samples_dir):
+                samples_dir = os.path.join(os.path.dirname(base_dir), "sample_images")
+
+            CURATED_SAMPLES = [
+                ("tomato_late_blight.jpg", {
+                    "en": "🍅 Tomato: Late Blight (Foliar Necrosis)",
+                    "hi": "🍅 टमाटर: पछेती झुलसा रोग (Late Blight)",
+                    "mr": "🍅 टोमॅटो: करपा / लेट ब्लाईट रोग"
+                }),
+                ("tomato_early_blight.jpg", {
+                    "en": "🍅 Tomato: Early Blight (Concentric Rings)",
+                    "hi": "🍅 टमाटर: अगेती झुलसा रोग (Early Blight)",
+                    "mr": "🍅 टोमॅटो: अगेती करपा रोग"
+                }),
+                ("tomato_healthy.jpg", {
+                    "en": "🌿 Tomato: Healthy Botanical Leaf",
+                    "hi": "🌿 टमाटर: स्वस्थ निरोगी पत्ता (Healthy)",
+                    "mr": "🌿 टोमॅटो: निरोगी पान (Healthy)"
+                }),
+                ("potato_late_blight.jpg", {
+                    "en": "🥔 Potato: Late Blight (Tuber & Foliage Blight)",
+                    "hi": "🥔 आलू: पछेती झुलसा रोग (Late Blight)",
+                    "mr": "🥔 बटाटा: लेट ब्लाईट करपा रोग"
+                }),
+                ("corn_common_rust.jpg", {
+                    "en": "🌽 Corn: Common Rust (Puccinia Pustules)",
+                    "hi": "🌽 मक्का: रतुआ रोग (Common Rust)",
+                    "mr": "🌽 मका: तांबेरा रोग (Rust)"
+                }),
+                ("apple_scab.jpg", {
+                    "en": "🍎 Apple: Apple Scab (Olive-Green Lesions)",
+                    "hi": "🍎 सेब: स्कैब / खपली रोग (Apple Scab)",
+                    "mr": "🍎 सफरचंद: स्कॅब रोग"
+                }),
+                ("apple_healthy.jpg", {
+                    "en": "🌿 Apple: Healthy Orchard Foliage",
+                    "hi": "🌿 सेब: स्वस्थ निरोगी पत्ता (Healthy)",
+                    "mr": "🌿 सफरचंद: निरोगी पान"
+                }),
+                ("grape_black_rot.jpg", {
+                    "en": "🍇 Grape: Black Rot (Guignardia Decay)",
+                    "hi": "🍇 अंगूर: काला सड़ांध रोग (Black Rot)",
+                    "mr": "🍇 द्राक्ष: काळी सड / ब्लॅक रॉट"
+                }),
+                ("pepper_bacterial_spot.jpg", {
+                    "en": "🫑 Bell Pepper: Bacterial Leaf Spot",
+                    "hi": "🫑 शिमला मिर्च: जीवाणु पत्ती धब्बा रोग",
+                    "mr": "🫑 ढोबळी मिरची: जिवाणू ठिपके रोग"
+                }),
+                ("non_leaf_smartphone.jpg", {
+                    "en": "🛑 [Recruiter Demo] Non-Leaf Object (Rejection Gate Test)",
+                    "hi": "🛑 [डेमो परीक्षण] गैर-पादप वस्तु (स्मार्टफोन रिजेक्शन गेट टेस्ट)",
+                    "mr": "🛑 [चाचणी नमुना] वनस्पती नसलेली वस्तू (स्मार्टफोन नकार गेट चाचणी)"
+                }),
+            ]
+
             none_label = get_text("none_upload_own", lang_code)
             sample_options = [none_label]
             sample_map = {}
-            if os.path.exists(val_dir):
+
+            if os.path.exists(samples_dir):
+                for filename, labels in CURATED_SAMPLES:
+                    img_path = os.path.join(samples_dir, filename)
+                    if os.path.exists(img_path):
+                        label = labels.get(lang_code, labels["en"])
+                        sample_options.append(label)
+                        sample_map[label] = img_path
+
+            # Fallback to plantvillage_data if present locally
+            val_dir = os.path.join(base_dir, "plantvillage_data", "data_38", "val")
+            if os.path.exists(val_dir) and len(sample_options) == 1:
                 for cls_name in PLANT_CLASSES:
                     cls_folder = os.path.join(val_dir, cls_name)
                     if os.path.exists(cls_folder):
@@ -783,6 +848,7 @@ def main():
                             label = f"{get_text('sample_prefix', lang_code)}: {loc_name}"
                             sample_options.append(label)
                             sample_map[label] = imgs[0]
+
             selected_sample = st.selectbox(get_text("sample_select_label", lang_code), sample_options)
 
         # Image resolution
@@ -793,11 +859,37 @@ def main():
             image_to_process = Image.open(sample_map[selected_sample])
 
         if image_to_process is None:
-            st.info(get_text("select_sample_prompt", lang_code))
-            st.markdown(f"### {get_text('supported_crops_heading', lang_code)}")
-            cols = st.columns(3)
-            for i, c in enumerate(PLANT_CLASSES):
-                cols[i % 3].markdown(f"- **{get_localized_disease_name(c, lang_code)}**")
+            if lang_code == "hi":
+                welcome_title = "🔬 एआई नैदानिक पैथोलॉजी स्कैनर में आपका स्वागत है"
+                welcome_sub = "जांच शुरू करने के लिए ऊपर ड्रॉपडाउन से <b>प्री-लोडेड नमूना पत्ती (Sample Leaf)</b> चुनें अथवा अपने डिवाइस से किसी पौधे की पत्ती की तस्वीर अपलोड करें।"
+                tip_title = "💡 रिक्रूटर एवं परीक्षक डेमो गाइड:"
+                tip_desc = "ड्रॉपडाउन में टमाटर, आलू, मक्का, सेब, अंगूर और शिमला मिर्च के विभिन्न रोगों के वास्तविक नमूने शामिल हैं। आप <b>'Non-Leaf Object'</b> नमूना चुनकर एआई का ऑटोमैटिक गैर-पादप रिजेक्शन गेट भी टेस्ट कर सकते हैं।"
+            elif lang_code == "mr":
+                welcome_title = "🔬 एआय डिजिटल पीक रोग स्कॅनर मध्ये आपले स्वागत आहे"
+                welcome_sub = "तपासणी सुरू करण्यासाठी वरील ड्रॉपडाउनमधून <b>आधीच उपलब्ध पानाचा नमुना (Sample Leaf)</b> निवडा किंवा स्वतःच्या पिकाच्या पानाचा फोटो अपलोड करा."
+                tip_title = "💡 परीक्षक व मुलाखतकारांसाठी विशेष टीप:"
+                tip_desc = "ड्रॉपडाउनमध्ये टोमॅटो, बटाटा, मका, सफरचंद, द्राक्ष आणि मिरचीच्या विविध रोगांचे नमुने जोडले आहेत. तुम्ही <b>'Non-Leaf Object'</b> नमुना निवडून एआय चे फसवणूक प्रतिबंधक तंत्रज्ञान (Security Rejection Gate) देखील तपासू शकता."
+            else:
+                welcome_title = "🔬 Clinical Phytosanitary Diagnostic Scanner"
+                welcome_sub = "To begin diagnosis, select any <b>Pre-loaded Sample Leaf</b> from the dropdown above, or upload a leaf photograph from your device."
+                tip_title = "💡 Evaluator & Recruiter Quick Demonstration Guide:"
+                tip_desc = "The dropdown includes pre-loaded foliar specimens for Tomato, Potato, Corn, Apple, Grape, and Bell Pepper pathologies. You can also select the <b>'Non-Leaf Object'</b> specimen to evaluate the autonomous anti-spoofing security rejection gate."
+
+            st.markdown(f"""
+            <div class="glass-card" style="text-align: center; padding: 36px 28px; margin-top: 15px;">
+                <div style="font-size: 3rem; margin-bottom: 12px;">🌿</div>
+                <h3 style="color: #065f46; font-weight: 800; margin-bottom: 8px;">{welcome_title}</h3>
+                <p style="color: #334155; font-size: 1rem; max-width: 680px; margin: 0 auto 20px auto; line-height: 1.6;">
+                    {welcome_sub}
+                </p>
+                <div style="background-color: #f0fdf4; border: 1px solid #a7f3d0; border-radius: 12px; padding: 16px 20px; max-width: 700px; margin: 0 auto; text-align: left;">
+                    <b style="color: #065f46; font-size: 0.95rem;">{tip_title}</b>
+                    <div style="color: #334155; font-size: 0.9rem; margin-top: 4px; line-height: 1.6;">
+                        {tip_desc}
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
             return
 
         # Execute Pipeline
