@@ -612,7 +612,7 @@ def main():
     # -------------------------------------------------------------------------
     # TOP NAVBAR
     # -------------------------------------------------------------------------
-    col_nav1, col_nav2, col_nav3 = st.columns([3.2, 1.8, 1.4])
+    col_nav1, col_nav2 = st.columns([4.5, 1.5])
     with col_nav1:
         st.markdown(f"""
         <div class="brand-title">
@@ -622,13 +622,6 @@ def main():
         """, unsafe_allow_html=True)
 
     with col_nav2:
-        new_diag_clean = get_text("new_diagnosis", lang_code).replace("➕", "").strip()
-        if st.button(f"➕ {new_diag_clean}", key="btn_top_new_diag", use_container_width=True):
-            st.session_state["active_consultation"] = None
-            st.session_state["current_view"] = "scanner"
-            st.rerun()
-
-    with col_nav3:
         # Language Switcher in Navbar
         lang_options = ["English", "हिन्दी (Hindi)", "मराठी (Marathi)"]
         current_idx = 1 if lang_code == "hi" else 2 if lang_code == "mr" else 0
