@@ -1,0 +1,24 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Large training datasets (not needed for deployment inference)
+core_engine/plantvillage_data/
+plantvillage_data/
+
+# Temporary storage & databases
+core_engine/history_storage/
+history_storage/
+*.log
+
+# Environment
+.env
+venv/
+env/
+.venv/
+
+# Backup weights & archives
+core_engine/checkpoint_weights.pt
+*.zip
