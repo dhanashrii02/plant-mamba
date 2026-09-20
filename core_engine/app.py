@@ -137,12 +137,68 @@ def render_gps_detector_button(lang_code):
     st.html(gps_html, unsafe_allow_javascript=True)
 
 
+def inject_mobile_auto_collapse():
+    """
+    Auto-collapses the mobile sidebar drawer upon tapping action buttons
+    (New Diagnosis or past consultation items), providing a seamless ChatGPT-like mobile UX.
+    Strictly queries stSidebarCollapseButton so it can never trigger an infinite expand loop.
+    """
+    js = """
+    <script>
+    (function() {
+        if (window.__pm_collapse_listener_ready) return;
+        window.__pm_collapse_listener_ready = true;
+
+        function tryCollapseSidebar() {
+            if (window.innerWidth > 850) return;
+            const sidebar = document.querySelector('[data-testid="stSidebar"]');
+            if (!sidebar) return;
+
+            // Check if sidebar is currently visible/expanded on mobile
+            const rect = sidebar.getBoundingClientRect();
+            if (rect.width < 50 || rect.right <= 0) return;
+
+            // Target ONLY the explicit collapse button inside the sidebar
+            const collapseBtn = sidebar.querySelector('[data-testid="stSidebarCollapseButton"] button, [data-testid="stSidebarCollapseButton"]');
+            if (collapseBtn) {
+                collapseBtn.click();
+            }
+        }
+
+        document.addEventListener('click', function(e) {
+            if (window.innerWidth > 850) return;
+
+            const sidebar = document.querySelector('[data-testid="stSidebar"]');
+            if (!sidebar || !sidebar.contains(e.target)) return;
+
+            // Ignore dropdown selectors, expand/collapse toggles themselves
+            if (e.target.closest('[data-testid="stSelectbox"], .stSelectbox, [data-testid="stSidebarCollapseButton"], [data-testid="stExpandSidebarButton"]')) {
+                return;
+            }
+
+            // Ignore delete button clicks (trash icons)
+            const btn = e.target.closest('button');
+            if (btn && (btn.innerText.includes('🗑') || btn.getAttribute('aria-label') === 'Delete from history')) {
+                return;
+            }
+
+            // Action button clicked inside sidebar (e.g. New Diagnosis, consultation item)
+            if (btn) {
+                setTimeout(tryCollapseSidebar, 100);
+            }
+        }, true);
+    })();
+    </script>
+    """
+    st.html(js, unsafe_allow_javascript=True)
+
+
 # --- Page Configuration ---
 st.set_page_config(
     page_title="Plant Mamba - Autonomous Crop Pathology Platform",
     page_icon="🌿",
     layout="wide",
-    initial_sidebar_state="auto"
+    initial_sidebar_state="collapsed"
 )
 
 # --- High-End Modern Styling (Bright & Clean Light Mode with Emerald Accents) ---
@@ -609,6 +665,9 @@ def main():
     # Ensure active language is initialized before rendering UI
     lang_code = st.session_state.get("lang_code", "en")
 
+    # Seamless ChatGPT-like mobile auto-collapse controller
+    inject_mobile_auto_collapse()
+
     # -------------------------------------------------------------------------
     # TOP NAVBAR
     # -------------------------------------------------------------------------
@@ -652,10 +711,9 @@ def main():
         role_tag = get_text("chief_agronomist_tag", lang_code)
     else:
         active_role = "Farmer"
-        role_pill_style = "background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;"
+        role_pill_style = "background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0;"
         role_tag = get_text("farmer_tag", lang_code)
 
-    # User welcome banner
     st.markdown(f"""
     <div style="font-size: 0.88rem; color: #64748b; margin-top: -12px; margin-bottom: 18px;">
         👤 {get_text('logged_in_as', lang_code)} <b style="color: #0f172a;">{user['full_name']}</b> <span style="{role_pill_style} padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; margin-left: 6px;">{role_tag}</span>
@@ -674,33 +732,29 @@ def main():
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # 2. Role-Differentiated Navigation Switcher (ONLY 2 CLEAN ITEMS PER ROLE)
-        st.markdown(f"##### 🧭 {get_text('nav_heading', lang_code)}")
+        # 2. Navigation Switcher (Only shown for Agronomist; Farmer defaults cleanly to scanner)
         if active_role == "Agronomist":
+            st.markdown(f"##### 🧭 {get_text('nav_heading', lang_code)}")
             nav_options = {
                 "scanner": get_text("nav_scanner", lang_code),
                 "agronomist_review": get_text("nav_review", lang_code),
             }
+            if st.session_state.get("current_view") not in nav_options:
+                st.session_state["current_view"] = "scanner"
+
+            view_keys = list(nav_options.keys())
+            selected_view_name = st.radio(
+                "Go to View:",
+                [nav_options[k] for k in view_keys],
+                index=view_keys.index(st.session_state["current_view"]),
+                label_visibility="collapsed"
+            )
+            for k, v in nav_options.items():
+                if v == selected_view_name and st.session_state.get("current_view") != k:
+                    st.session_state["current_view"] = k
+                    st.rerun()
         else:  # Farmer
-            nav_options = {
-                "scanner": get_text("nav_scanner", lang_code),
-                "spray_calendar": get_text("nav_spray_calendar", lang_code),
-            }
-
-        if st.session_state.get("current_view") not in nav_options:
-            st.session_state["current_view"] = list(nav_options.keys())[0]
-
-        view_keys = list(nav_options.keys())
-        selected_view_name = st.radio(
-            "Go to View:",
-            [nav_options[k] for k in view_keys],
-            index=view_keys.index(st.session_state["current_view"]),
-            label_visibility="collapsed"
-        )
-        for k, v in nav_options.items():
-            if v == selected_view_name and st.session_state.get("current_view") != k:
-                st.session_state["current_view"] = k
-                st.rerun()
+            st.session_state["current_view"] = "scanner"
 
         # 3. Location & Live Weather Settings
         st.markdown("---")
@@ -1234,14 +1288,10 @@ def main():
         )
 
         # Role-Specific Quick Actions from Scanner
-        st.markdown("---")
         if active_role == "Agronomist":
+            st.markdown("---")
             if st.button(get_text("agro_open_review_btn", lang_code), key="sc_agro_audit", use_container_width=True):
                 st.session_state["current_view"] = "agronomist_review"
-                st.rerun()
-        else:  # Farmer
-            if st.button(get_text("farmer_open_spray_btn", lang_code), key="sc_farmer_spray", use_container_width=True):
-                st.session_state["current_view"] = "spray_calendar"
                 st.rerun()
 
     # =========================================================================
@@ -1445,7 +1495,8 @@ def main():
     elif current_view == "outbreak_broadcast":
         role_views.render_outbreak_broadcast(user, lang_code)
     elif current_view == "spray_calendar":
-        role_views.render_spray_calendar_calculator(user, lang_code)
+        st.session_state["current_view"] = "scanner"
+        st.rerun()
     elif current_view == "outbreak_alerts":
         role_views.render_farmer_outbreak_alerts(user, lang_code)
     elif current_view == "helpline":
